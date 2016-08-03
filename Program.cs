@@ -83,10 +83,29 @@ namespace SnakeGame
 
         static void SpawnFood()
         {
-            do
+            var availablePositions = new List<Position>();
+
+            for (int x = 1; x < Width - 1; x++)
             {
-                Food = new Position(random.Next(1, Width - 1), random.Next(1, Height - 1));
-            } while (Snake.Any(s => s.Equals(Food)));
+                for (int y = 1; y < Height - 1; y++)
+                {
+                    var pos = new Position(x, y);
+                    if (!Snake.Any(s => s.Equals(pos)))
+                    {
+                        availablePositions.Add(pos);
+                    }
+                }
+            }
+
+            if (availablePositions.Count > 0)
+            {
+                Food = availablePositions[random.Next(availablePositions.Count)];
+            }
+            else
+            {
+                // Win condition - board is full!
+                GameOver = true;
+            }
         }
 
         static void ReadInput()
