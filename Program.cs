@@ -58,16 +58,34 @@ namespace SnakeGame
                 Thread.Sleep(100);
             }
 
+            inputThread.Join();
+
             Console.SetCursorPosition(Width / 2 - 5, Height / 2);
             Console.ForegroundColor = ConsoleColor.Red;
             Console.WriteLine("GAME OVER!");
             Console.SetCursorPosition(Width / 2 - 7, Height / 2 + 1);
             Console.WriteLine($"Final Score: {Score}");
+            Console.SetCursorPosition(Width / 2 - 10, Height / 2 + 3);
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine("Press R to Restart or ESC to Quit");
             Console.ResetColor();
+
+            while (true)
+            {
+                var key = Console.ReadKey(true).Key;
+                if (key == ConsoleKey.R)
+                {
+                    Main(args);
+                    return;
+                }
+                else if (key == ConsoleKey.Escape)
+                {
+                    break;
+                }
+            }
+
             Console.SetCursorPosition(0, Height + 3);
             Console.CursorVisible = true;
-
-            inputThread.Join();
         }
 
         static void InitializeGame()
