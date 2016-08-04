@@ -11,11 +11,13 @@ namespace SnakeGame
         static int Height = 20;
         static int Score = 0;
         static Direction CurrentDirection = Direction.Right;
+        static Direction NextDirection = Direction.Right;
         static Random random = new Random();
         static List<Position> Snake = new List<Position>();
         static Position Food;
         static bool GameOver = false;
         static Position LastTail;
+        static object directionLock = new object();
 
         enum Direction { Up, Down, Left, Right }
 
@@ -78,6 +80,7 @@ namespace SnakeGame
             SpawnFood();
             Score = 0;
             CurrentDirection = Direction.Right;
+            NextDirection = Direction.Right;
             GameOver = false;
         }
 
@@ -116,27 +119,30 @@ namespace SnakeGame
                 {
                     var key = Console.ReadKey(true).Key;
 
-                    switch (key)
+                    lock (directionLock)
                     {
-                        case ConsoleKey.UpArrow:
-                            if (CurrentDirection != Direction.Down)
-                                CurrentDirection = Direction.Up;
-                            break;
-                        case ConsoleKey.DownArrow:
-                            if (CurrentDirection != Direction.Up)
-                                CurrentDirection = Direction.Down;
-                            break;
-                        case ConsoleKey.LeftArrow:
-                            if (CurrentDirection != Direction.Right)
-                                CurrentDirection = Direction.Left;
-                            break;
-                        case ConsoleKey.RightArrow:
-                            if (CurrentDirection != Direction.Left)
-                                CurrentDirection = Direction.Right;
-                            break;
-                        case ConsoleKey.Escape:
-                            GameOver = true;
-                            break;
+                        switch (key)
+                        {
+                            case ConsoleKey.UpArrow:
+                                if (CurrentDirection != Direction.Down)
+                                    NextDirection = Direction.Up;
+                                break;
+                            case ConsoleKey.DownArrow:
+                                if (CurrentDirection != Direction.Up)
+                                    NextDirection = Direction.Down;
+                                break;
+                            case ConsoleKey.LeftArrow:
+                                if (CurrentDirection != Direction.Right)
+                                    NextDirection = Direction.Left;
+                                break;
+                            case ConsoleKey.RightArrow:
+                                if (CurrentDirection != Direction.Left)
+                                    NextDirection = Direction.Right;
+                                break;
+                            case ConsoleKey.Escape:
+                                GameOver = true;
+                                break;
+                        }
                     }
                 }
             }
@@ -144,6 +150,11 @@ namespace SnakeGame
 
         static void Update()
         {
+            lock (directionLock)
+            {
+                CurrentDirection = NextDirection;
+            }
+
             Position head = Snake[0];
             Position newHead;
 
