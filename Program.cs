@@ -7,24 +7,27 @@ namespace SnakeGame
 {
     class Program
     {
-        static int Width = 40;
-        static int Height = 20;
-        static int Score = 0;
-        static Direction CurrentDirection = Direction.Right;
-        static Direction NextDirection = Direction.Right;
-        static Random random = new Random();
-        static List<Position> Snake = new List<Position>();
-        static Position Food;
-        static bool GameOver = false;
-        static Position LastTail;
-        static object directionLock = new object();
+        private const int Width = 40;
+        private const int Height = 20;
+        private const int GameSpeed = 100;
+        private const int PointsPerFood = 10;
+
+        private static int _score;
+        private static Direction _currentDirection;
+        private static Direction _nextDirection;
+        private static readonly Random _random = new Random();
+        private static readonly List<Position> _snake = new List<Position>();
+        private static Position _food;
+        private static bool _gameOver;
+        private static Position _lastTail;
+        private static readonly object _directionLock = new object();
 
         enum Direction { Up, Down, Left, Right }
 
         struct Position
         {
-            public int X { get; set; }
-            public int Y { get; set; }
+            public int X { get; }
+            public int Y { get; }
 
             public Position(int x, int y)
             {
@@ -32,10 +35,7 @@ namespace SnakeGame
                 Y = y;
             }
 
-            public bool Equals(Position other)
-            {
-                return X == other.X && Y == other.Y;
-            }
+            public bool Equals(Position other) => X == other.X && Y == other.Y;
         }
 
         static void Main(string[] args)
@@ -43,33 +43,73 @@ namespace SnakeGame
             Console.CursorVisible = false;
 
             InitializeGame();
+            RenderInitialScreen();
+
+            var inputThread = new Thread(ReadInput);
+            inputThread.Start();
+
+            RunGameLoop();
+
+            inputThread.Join();
+
+            ShowGameOver(args);
+        }
+
+        private static void InitializeGame()
+        {
+            _snake.Clear();
+            _snake.Add(new Position(Width / 2, Height / 2));
+            _snake.Add(new Position(Width / 2 - 1, Height / 2));
+            _snake.Add(new Position(Width / 2 - 2, Height / 2));
+
+            SpawnFood();
+            _score = 0;
+            _currentDirection = Direction.Right;
+            _nextDirection = Direction.Right;
+            _gameOver = false;
+        }
+
+        private static void RenderInitialScreen()
+        {
             DrawBorders();
             DrawFood();
             DrawSnake();
             DrawScore();
+        }
 
-            Thread inputThread = new Thread(ReadInput);
-            inputThread.Start();
-
-            while (!GameOver)
+        private static void RunGameLoop()
+        {
+            while (!_gameOver)
             {
-                Update();
-                Draw();
-                Thread.Sleep(100);
+                UpdateGameState();
+                RenderFrame();
+                Thread.Sleep(GameSpeed);
             }
+        }
 
-            inputThread.Join();
+        private static void ShowGameOver(string[] args)
+        {
+            DisplayGameOverMessage();
+            HandleRestartChoice(args);
+            Console.SetCursorPosition(0, Height + 3);
+            Console.CursorVisible = true;
+        }
 
+        private static void DisplayGameOverMessage()
+        {
             Console.SetCursorPosition(Width / 2 - 5, Height / 2);
             Console.ForegroundColor = ConsoleColor.Red;
             Console.WriteLine("GAME OVER!");
             Console.SetCursorPosition(Width / 2 - 7, Height / 2 + 1);
-            Console.WriteLine($"Final Score: {Score}");
+            Console.WriteLine($"Final Score: {_score}");
             Console.SetCursorPosition(Width / 2 - 10, Height / 2 + 3);
             Console.ForegroundColor = ConsoleColor.Yellow;
             Console.WriteLine("Press R to Restart or ESC to Quit");
             Console.ResetColor();
+        }
 
+        private static void HandleRestartChoice(string[] args)
+        {
             while (true)
             {
                 var key = Console.ReadKey(true).Key;
@@ -83,177 +123,201 @@ namespace SnakeGame
                     break;
                 }
             }
-
-            Console.SetCursorPosition(0, Height + 3);
-            Console.CursorVisible = true;
         }
 
-        static void InitializeGame()
+        private static void SpawnFood()
         {
-            Snake.Clear();
-            Snake.Add(new Position(Width / 2, Height / 2));
-            Snake.Add(new Position(Width / 2 - 1, Height / 2));
-            Snake.Add(new Position(Width / 2 - 2, Height / 2));
+            var availablePositions = GetAvailablePositions();
 
-            SpawnFood();
-            Score = 0;
-            CurrentDirection = Direction.Right;
-            NextDirection = Direction.Right;
-            GameOver = false;
+            if (availablePositions.Count > 0)
+            {
+                _food = availablePositions[_random.Next(availablePositions.Count)];
+            }
+            else
+            {
+                _gameOver = true;
+            }
         }
 
-        static void SpawnFood()
+        private static List<Position> GetAvailablePositions()
         {
-            var availablePositions = new List<Position>();
+            var positions = new List<Position>();
 
             for (int x = 1; x < Width - 1; x++)
             {
                 for (int y = 1; y < Height - 1; y++)
                 {
                     var pos = new Position(x, y);
-                    if (!Snake.Any(s => s.Equals(pos)))
+                    if (!_snake.Any(s => s.Equals(pos)))
                     {
-                        availablePositions.Add(pos);
+                        positions.Add(pos);
                     }
                 }
             }
 
-            if (availablePositions.Count > 0)
-            {
-                Food = availablePositions[random.Next(availablePositions.Count)];
-            }
-            else
-            {
-                // Win condition - board is full!
-                GameOver = true;
-            }
+            return positions;
         }
 
-        static void ReadInput()
+        private static void ReadInput()
         {
-            while (!GameOver)
+            while (!_gameOver)
             {
                 if (Console.KeyAvailable)
                 {
                     var key = Console.ReadKey(true).Key;
-
-                    lock (directionLock)
-                    {
-                        switch (key)
-                        {
-                            case ConsoleKey.UpArrow:
-                                if (CurrentDirection != Direction.Down)
-                                    NextDirection = Direction.Up;
-                                break;
-                            case ConsoleKey.DownArrow:
-                                if (CurrentDirection != Direction.Up)
-                                    NextDirection = Direction.Down;
-                                break;
-                            case ConsoleKey.LeftArrow:
-                                if (CurrentDirection != Direction.Right)
-                                    NextDirection = Direction.Left;
-                                break;
-                            case ConsoleKey.RightArrow:
-                                if (CurrentDirection != Direction.Left)
-                                    NextDirection = Direction.Right;
-                                break;
-                            case ConsoleKey.Escape:
-                                GameOver = true;
-                                break;
-                        }
-                    }
+                    HandleKeyPress(key);
                 }
             }
         }
 
-        static void Update()
+        private static void HandleKeyPress(ConsoleKey key)
         {
-            lock (directionLock)
+            lock (_directionLock)
             {
-                CurrentDirection = NextDirection;
-            }
-
-            Position head = Snake[0];
-            Position newHead;
-
-            switch (CurrentDirection)
-            {
-                case Direction.Up:
-                    newHead = new Position(head.X, head.Y - 1);
-                    break;
-                case Direction.Down:
-                    newHead = new Position(head.X, head.Y + 1);
-                    break;
-                case Direction.Left:
-                    newHead = new Position(head.X - 1, head.Y);
-                    break;
-                case Direction.Right:
-                    newHead = new Position(head.X + 1, head.Y);
-                    break;
-                default:
-                    newHead = head;
-                    break;
-            }
-
-            // Check wall collision
-            if (newHead.X <= 0 || newHead.X >= Width - 1 ||
-                newHead.Y <= 0 || newHead.Y >= Height - 1)
-            {
-                GameOver = true;
-                return;
-            }
-
-            // Check self collision
-            if (Snake.Any(s => s.Equals(newHead)))
-            {
-                GameOver = true;
-                return;
-            }
-
-            Snake.Insert(0, newHead);
-
-            // Check if food eaten
-            if (newHead.Equals(Food))
-            {
-                Score += 10;
-                SpawnFood();
-                LastTail = new Position(-1, -1); // No tail to erase
-            }
-            else
-            {
-                LastTail = Snake[Snake.Count - 1];
-                Snake.RemoveAt(Snake.Count - 1);
+                switch (key)
+                {
+                    case ConsoleKey.UpArrow:
+                        if (_currentDirection != Direction.Down)
+                            _nextDirection = Direction.Up;
+                        break;
+                    case ConsoleKey.DownArrow:
+                        if (_currentDirection != Direction.Up)
+                            _nextDirection = Direction.Down;
+                        break;
+                    case ConsoleKey.LeftArrow:
+                        if (_currentDirection != Direction.Right)
+                            _nextDirection = Direction.Left;
+                        break;
+                    case ConsoleKey.RightArrow:
+                        if (_currentDirection != Direction.Left)
+                            _nextDirection = Direction.Right;
+                        break;
+                    case ConsoleKey.Escape:
+                        _gameOver = true;
+                        break;
+                }
             }
         }
 
-        static void Draw()
+        private static void UpdateGameState()
         {
-            // Erase old tail
-            if (LastTail.X >= 0)
+            UpdateDirection();
+            var newHead = CalculateNewHeadPosition();
+
+            if (CheckCollision(newHead))
             {
-                Console.SetCursorPosition(LastTail.X, LastTail.Y);
-                Console.Write(" ");
+                _gameOver = true;
+                return;
             }
 
-            // Draw new head
+            MoveSnake(newHead);
+        }
+
+        private static void UpdateDirection()
+        {
+            lock (_directionLock)
+            {
+                _currentDirection = _nextDirection;
+            }
+        }
+
+        private static Position CalculateNewHeadPosition()
+        {
+            var head = _snake[0];
+
+            return _currentDirection switch
+            {
+                Direction.Up => new Position(head.X, head.Y - 1),
+                Direction.Down => new Position(head.X, head.Y + 1),
+                Direction.Left => new Position(head.X - 1, head.Y),
+                Direction.Right => new Position(head.X + 1, head.Y),
+                _ => head
+            };
+        }
+
+        private static bool CheckCollision(Position position)
+        {
+            return CheckWallCollision(position) || CheckSelfCollision(position);
+        }
+
+        private static bool CheckWallCollision(Position position)
+        {
+            return position.X <= 0 || position.X >= Width - 1 ||
+                   position.Y <= 0 || position.Y >= Height - 1;
+        }
+
+        private static bool CheckSelfCollision(Position position)
+        {
+            return _snake.Any(s => s.Equals(position));
+        }
+
+        private static void MoveSnake(Position newHead)
+        {
+            _snake.Insert(0, newHead);
+
+            if (newHead.Equals(_food))
+            {
+                HandleFoodEaten();
+            }
+            else
+            {
+                RemoveTail();
+            }
+        }
+
+        private static void HandleFoodEaten()
+        {
+            _score += PointsPerFood;
+            SpawnFood();
+            _lastTail = new Position(-1, -1);
+        }
+
+        private static void RemoveTail()
+        {
+            _lastTail = _snake[_snake.Count - 1];
+            _snake.RemoveAt(_snake.Count - 1);
+        }
+
+        private static void RenderFrame()
+        {
+            EraseTail();
+            DrawHead();
+            DrawFood();
+            DrawScore();
+            Console.ResetColor();
+        }
+
+        private static void EraseTail()
+        {
+            if (_lastTail.X >= 0)
+            {
+                Console.SetCursorPosition(_lastTail.X, _lastTail.Y);
+                Console.Write(" ");
+            }
+        }
+
+        private static void DrawHead()
+        {
             Console.ForegroundColor = ConsoleColor.Green;
-            Position head = Snake[0];
+            var head = _snake[0];
             Console.SetCursorPosition(head.X, head.Y);
             Console.Write("●");
+        }
 
-            // Draw food if it changed
-            DrawFood();
+        private static void DrawBorders()
+        {
+            Console.Clear();
+            Console.ForegroundColor = ConsoleColor.White;
 
-            // Update score
-            DrawScore();
+            DrawHorizontalBorders();
+            DrawVerticalBorders();
+            DrawCorners();
 
             Console.ResetColor();
         }
 
-        static void DrawBorders()
+        private static void DrawHorizontalBorders()
         {
-            Console.Clear();
-            Console.ForegroundColor = ConsoleColor.White;
             for (int i = 0; i < Width; i++)
             {
                 Console.SetCursorPosition(i, 0);
@@ -261,6 +325,10 @@ namespace SnakeGame
                 Console.SetCursorPosition(i, Height - 1);
                 Console.Write("═");
             }
+        }
+
+        private static void DrawVerticalBorders()
+        {
             for (int i = 0; i < Height; i++)
             {
                 Console.SetCursorPosition(0, i);
@@ -268,6 +336,10 @@ namespace SnakeGame
                 Console.SetCursorPosition(Width - 1, i);
                 Console.Write("║");
             }
+        }
+
+        private static void DrawCorners()
+        {
             Console.SetCursorPosition(0, 0);
             Console.Write("╔");
             Console.SetCursorPosition(Width - 1, 0);
@@ -276,13 +348,12 @@ namespace SnakeGame
             Console.Write("╚");
             Console.SetCursorPosition(Width - 1, Height - 1);
             Console.Write("╝");
-            Console.ResetColor();
         }
 
-        static void DrawSnake()
+        private static void DrawSnake()
         {
             Console.ForegroundColor = ConsoleColor.Green;
-            foreach (var segment in Snake)
+            foreach (var segment in _snake)
             {
                 Console.SetCursorPosition(segment.X, segment.Y);
                 Console.Write("●");
@@ -290,19 +361,19 @@ namespace SnakeGame
             Console.ResetColor();
         }
 
-        static void DrawFood()
+        private static void DrawFood()
         {
             Console.ForegroundColor = ConsoleColor.Red;
-            Console.SetCursorPosition(Food.X, Food.Y);
+            Console.SetCursorPosition(_food.X, _food.Y);
             Console.Write("◆");
             Console.ResetColor();
         }
 
-        static void DrawScore()
+        private static void DrawScore()
         {
             Console.ForegroundColor = ConsoleColor.Yellow;
             Console.SetCursorPosition(2, Height + 1);
-            Console.Write($"Score: {Score} | Use Arrow Keys to move | ESC to quit");
+            Console.Write($"Score: {_score} | Use Arrow Keys to move | ESC to quit");
             Console.ResetColor();
         }
     }
