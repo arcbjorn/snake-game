@@ -102,7 +102,7 @@ namespace SnakeGame
             Console.WriteLine("GAME OVER!");
             Console.SetCursorPosition(Width / 2 - 7, Height / 2 + 1);
             Console.WriteLine($"Final Score: {_score}");
-            Console.SetCursorPosition(Width / 2 - 10, Height / 2 + 3);
+            Console.SetCursorPosition(Width / 2 - 18, Height / 2 + 3);
             Console.ForegroundColor = ConsoleColor.Yellow;
             Console.WriteLine("Press R to Restart or ESC to Quit");
             Console.ResetColor();
